@@ -98,7 +98,10 @@ def http_request(url, method="GET", data=None, headers=None, timeout=30, cookies
     except urllib.error.HTTPError as e:
         content = e.read()
         text = content.decode("utf-8", errors="replace")
-        return text, e.code, e.url
+        # For redirects, expose the absolute Location so callers can follow it.
+        location = e.headers.get("Location") if e.headers else None
+        final = urllib.parse.urljoin(url, location) if location else e.url
+        return text, e.code, final
     except urllib.error.URLError as e:
         log(f"URL Error for {url}: {e}", "error")
         return None, 0, url
@@ -141,23 +144,14 @@ def http_request_follow(url, headers=None, timeout=30):
 
 def follow_redirects(url, headers=None, timeout=30, max_redirects=5):
     """Follow redirects and return the final URL."""
+    current = url
     for _ in range(max_redirects):
-        text, code, final_url = http_request(url, headers=headers, timeout=timeout)
-        if code in (301, 302, 303, 307, 308) and final_url != url:
-            # Get the Location header
-            req = urllib.request.Request(url, headers=headers or {})
-            try:
-                resp = urllib.request.urlopen(req, timeout=timeout)
-                url = resp.geturl()
-            except urllib.error.HTTPError as e:
-                location = e.headers.get("Location")
-                if location:
-                    url = location if location.startswith("http") else urllib.parse.urljoin(url, location)
-                else:
-                    break
+        _text, code, final_url = http_request(current, headers=headers, timeout=timeout)
+        if code in (301, 302, 303, 307, 308) and final_url and final_url != current:
+            current = final_url
         else:
             break
-    return url
+    return current
 
 
 def extract_json_from_script(html, var_name):
@@ -199,8 +193,8 @@ def find_iframe_src(html, keyword=None):
     pattern = r'<iframe[^>]+src=["\']([^"\']+)["\']'
     for match in re.finditer(pattern, html, re.IGNORECASE):
         src = match.group(1)
-        # Decode HTML entities (e.g. &amp; -> &)
-        src = src.replace('&amp;', '&')
+        # Decode HTML entities (&amp;, &#038;, &#039;, ...)
+        src = clean_html_entities(src)
         if keyword is None or keyword.lower() in src.lower():
             # Handle protocol-relative URLs
             if src.startswith("//"):

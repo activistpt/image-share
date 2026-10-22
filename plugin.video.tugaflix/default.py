@@ -15,6 +15,7 @@ try:
 except Exception:
     pass
 
+Router = None
 try:
     from resources.lib.router import Router
     from resources.lib.common import log
@@ -24,6 +25,7 @@ except Exception as e:
         import xbmc
         xbmc.log(f"[plugin.video.tugaflix] FATAL: Failed to import: {e}", xbmc.LOGERROR)
     except Exception:
-        pass
+        print(f"[plugin.video.tugaflix] FATAL: Failed to import: {e}", file=sys.stderr)
 
-Router().run()
+if Router is not None:
+    Router().run()

@@ -5,7 +5,7 @@ TugaFlix Kodi Addon - Constants
 
 ADDON_ID = "plugin.video.tugaflix"
 ADDON_NAME = "TugaFlix"
-ADDON_VERSION = "1.0.0"
+ADDON_VERSION = "1.0.5"
 
 # Base URLs
 BASE_URL = "https://tugaflix.site"

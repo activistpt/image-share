@@ -6,13 +6,44 @@ TugaFlix Kodi Addon - Provider resolution dispatch.
 from __future__ import absolute_import
 
 from resources.lib.providers.streamtape import StreamtapeResolver
-from resources.lib.common import http_request, log
+from resources.lib.common import http_request, http_request_follow, clean_html_entities, log
 from resources.lib.constants import PROVIDERS
 
+_REFERER = "https://tugaflix.site/"
+_REDIRECT_CODES = (301, 302, 303, 307, 308)
 
-def resolve_movie_url(slug, year=None):
+
+def _post(url, data):
     """
-    Resolve a movie slug to a direct playable URL.
+    POST and follow redirects to the real page.
+
+    Some legacy slugs redirect on GET but answer POST with a 404, so on 404
+    the canonical URL is resolved with a redirect-following GET first.
+    """
+    from resources.lib.constants import USER_AGENT
+
+    headers = {"User-Agent": USER_AGENT, "Referer": _REFERER}
+    current = url
+    for _ in range(4):
+        html, code, final = http_request(current, method="POST", data=data,
+                                         headers=headers, timeout=30)
+        if code in _REDIRECT_CODES and final and final != current:
+            current = final
+            continue
+        if code == 404:
+            _text, _code, canonical = http_request_follow(current, timeout=30)
+            if canonical and canonical != current:
+                log(f"Following canonical URL: {canonical}", "debug")
+                current = canonical
+                continue
+            return None, code, current
+        return html, code, current
+    return html, code, current
+
+
+def resolve_movie_url(slug, year=None, url=None):
+    """
+    Resolve a movie to a direct playable URL.
 
     Flow:
       1. POST to the movie page with server_name=st1 (Streamtape)
@@ -20,18 +51,17 @@ def resolve_movie_url(slug, year=None):
       3. POST start_video=1 to get the Streamtape embed iframe
       4. Resolve the Streamtape embed to a direct MP4 URL
     """
-    from resources.lib.constants import BASE_URL, USER_AGENT
+    from resources.lib.constants import BASE_URL
 
-    movie_url = f"{BASE_URL}/filmes/{slug}/"
-    if year:
-        movie_url = f"{BASE_URL}/filmes/{slug}-{year}/"
+    if url:
+        movie_url = url
+    else:
+        movie_url = f"{BASE_URL}/filmes/{slug}/"
+        if year:
+            movie_url = f"{BASE_URL}/filmes/{slug}-{year}/"
 
     # Step 1: POST server selection to get the player iframe
-    html, code, _ = http_request(
-        movie_url, method="POST", data={"server_name": "st1"},
-        headers={"User-Agent": USER_AGENT, "Referer": f"{BASE_URL}/"},
-        timeout=30,
-    )
+    html, code, movie_url = _post(movie_url, {"server_name": "st1"})
 
     if not html:
         log(f"Failed to fetch movie page: {movie_url}", "error")
@@ -46,11 +76,7 @@ def resolve_movie_url(slug, year=None):
     log(f"Player iframe: {player_iframe}", "debug")
 
     # Step 3: POST start_video=1 to get the Streamtape embed
-    html2, code2, _ = http_request(
-        player_iframe, method="POST", data={"start_video": "1"},
-        headers={"User-Agent": USER_AGENT, "Referer": f"{BASE_URL}/"},
-        timeout=30,
-    )
+    html2, code2, _ = _post(player_iframe, {"start_video": "1"})
 
     if not html2:
         log("Failed to fetch player page", "error")
@@ -71,9 +97,9 @@ def resolve_movie_url(slug, year=None):
     return None
 
 
-def resolve_episode_url(series_slug, season, episode):
+def resolve_episode_url(series_slug, season, episode, url=None):
     """
-    Resolve a TV episode URL to a direct playable URL.
+    Resolve a TV episode to a direct playable URL.
 
     Flow:
       1. Fetch the episode page on tugaflix
@@ -81,46 +107,22 @@ def resolve_episode_url(series_slug, season, episode):
       3. POST start_video=1 to get the Streamtape embed
       4. Resolve Streamtape to direct MP4
     """
-    from resources.lib.constants import BASE_URL, USER_AGENT
+    from resources.lib.constants import BASE_URL
 
-    episode_url = f"{BASE_URL}/series/{series_slug}/{season}/{episode}/"
+    episode_url = url or f"{BASE_URL}/series/{series_slug}/{season}/{episode}/"
 
-    html, code, _ = http_request(
-        episode_url,
-        headers={"User-Agent": USER_AGENT, "Referer": f"{BASE_URL}/"},
-        timeout=30,
-    )
-
-    if not html:
-        log(f"Failed to fetch episode page: {episode_url}", "error")
+    html, code, final = http_request_follow(episode_url, timeout=30)
+    if not html or code != 200:
+        log(f"Failed to fetch episode page: {episode_url} (code={code})", "error")
         return None
 
-    # Find tuga.best iframe
+    # Find tuga.best iframe (either player/movie.php or player/tv.php)
     player_iframe = _extract_iframe_src(html, "tuga.best")
     if player_iframe:
-        # TV episodes use name="submit" instead of name="start_video"
-        post_data = {"submit": "1"}
-        html2, code2, _ = http_request(
-            player_iframe, method="POST", data=post_data,
-            headers={"User-Agent": USER_AGENT, "Referer": f"{BASE_URL}/"},
-            timeout=30,
-        )
-        if html2:
-            streamtape_url = _extract_iframe_src(html2, "streamtape.com")
-            if streamtape_url:
-                result = StreamtapeResolver().resolve(streamtape_url)
-                if result and result.get('url'):
-                    return result['url']
-
-    # Fallback: try tv.php directly (same POST parameter)
-    tv_php_url = _extract_iframe_src(html, "tuga.best/player/tv.php")
-    if tv_php_url:
-        html2, _, _ = http_request(
-            tv_php_url, method="POST", data={"submit": "1"},
-            headers={"User-Agent": USER_AGENT, "Referer": f"{BASE_URL}/"},
-            timeout=30,
-        )
-        if html2:
+        for post_data in ({"submit": "1"}, {"start_video": "1"}):
+            html2, _code2, _ = _post(player_iframe, post_data)
+            if not html2:
+                continue
             streamtape_url = _extract_iframe_src(html2, "streamtape.com")
             if streamtape_url:
                 result = StreamtapeResolver().resolve(streamtape_url)
@@ -136,8 +138,8 @@ def _extract_iframe_src(html, keyword=None):
     import re
     pattern = r'<iframe[^>]+src=["\']([^"\']+)["\']'
     for match in re.finditer(pattern, html, re.IGNORECASE):
-        src = match.group(1)
-        src = src.replace('&amp;', '&')
+        # Decode HTML entities (&#038; etc.) so query params are not truncated
+        src = clean_html_entities(match.group(1))
         if src.startswith("//"):
             src = "https:" + src
         if keyword is None or keyword.lower() in src.lower():

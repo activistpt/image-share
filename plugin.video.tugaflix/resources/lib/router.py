@@ -27,7 +27,7 @@ def get_params():
     """Parse plugin:// URL parameters from sys.argv[2]."""
     params = {}
     if len(sys.argv) > 2 and sys.argv[2]:
-        for pair in sys.argv[2].split('&'):
+        for pair in sys.argv[2].lstrip('?').split('&'):
             if '=' in pair:
                 key, val = pair.split('=', 1)
                 params[urllib.parse.unquote(key)] = urllib.parse.unquote(val)
@@ -61,16 +61,22 @@ def add_dir(handle, label, query, iconimage=None, isfolder=True):
 def add_movie_item(handle, title, year, poster, info=None):
     if not _HAS_KODI:
         return
-    query = {'action': 'play_movie', 'title': title, 'year': str(year),
-             'slug': info.get('slug', '') if info else ''}
+    query = {'action': 'play_movie', 'title': title, 'year': str(year or ''),
+             'slug': info.get('slug', '') if info else '',
+             'url': info.get('url', '') if info else ''}
     url = build_plugin_url(query)
-    listitem = xbmcgui.ListItem(label=f"{title} ({year})")
+    label = f"{title} ({year})" if year else title
+    listitem = xbmcgui.ListItem(label=label)
     listitem.setArt({'thumb': poster or "DefaultVideo.png", 'icon': poster or "DefaultVideo.png",
                      'poster': poster or '', 'fanart': poster or ''})
+    try:
+        rating = float(info.get('rating', 0)) if info and info.get('rating') else 0
+    except (TypeError, ValueError):
+        rating = 0
     listitem.setInfo('video', {
-        'title': title, 'year': year,
+        'title': title, 'year': year or 0,
         'plot': info.get('plot', '') if info else '',
-        'rating': float(info.get('rating', 0)) if info and info.get('rating') else 0,
+        'rating': rating,
     })
     listitem.setProperty('isplayable', 'true')
     xbmcplugin.addDirectoryItem(handle, url, listitem, isfolder=False)
@@ -80,7 +86,8 @@ def add_tvshow_item(handle, title, poster, info=None):
     if not _HAS_KODI:
         return
     query = {'action': 'seasons', 'title': title,
-             'slug': info.get('slug', '') if info else ''}
+             'slug': info.get('slug', '') if info else '',
+             'url': info.get('url', '') if info else ''}
     url = build_plugin_url(query)
     listitem = xbmcgui.ListItem(label=title)
     listitem.setArt({'thumb': poster or "DefaultTVShows.png", 'icon': poster or "DefaultTVShows.png",
@@ -96,6 +103,7 @@ def add_episode_item(handle, title, season, episode, poster, info=None):
     query = {'action': 'play_episode', 'title': title,
              'season': str(season), 'episode': str(episode),
              'slug': info.get('slug', '') if info else '',
+             'url': info.get('url', '') if info else '',
              'series_title': info.get('series_title', '') if info else ''}
     url = build_plugin_url(query)
     listitem = xbmcgui.ListItem(label=title)
@@ -163,28 +171,35 @@ class Router:
 
     def list_movies(self, params):
         scraper = TugaFlixScraper()
-        items = scraper.get_movies_listing(params.get('page', '1'),
-                                          genre=params.get('genre'),
-                                          year=params.get('year'),
-                                          country=params.get('country'))
+        page = params.get('page', '1')
+        genre = params.get('genre')
+        year = params.get('year')
+        country = params.get('country')
+        items = scraper.get_movies_listing(page, genre=genre, year=year,
+                                          country=country)
         for item in items:
-            add_movie_item(self.handle, item['title'], item['year'],
+            add_movie_item(self.handle, item['title'], item.get('year'),
                            item.get('poster'), info=item)
         if items:
-            np = int(params.get('page', '1')) + 1
-            add_dir(self.handle, "Pagina Seguinte",
-                    {'action': 'movies_browse', 'page': str(np)}, "DefaultFolder.png")
+            np = int(page) + 1
+            next_page = {'action': 'movies_browse', 'page': str(np)}
+            for key, value in (('genre', genre), ('year', year),
+                               ('country', country)):
+                if value:
+                    next_page[key] = value
+            add_dir(self.handle, "Pagina Seguinte", next_page, "DefaultFolder.png")
         set_content_and_sort(self.handle, "movies")
         end_directory(self.handle)
 
     def list_series(self, params):
         scraper = TugaFlixScraper()
-        items = scraper.get_series_listing(params.get('page', '1'))
+        page = params.get('page', '1')
+        items = scraper.get_series_listing(page)
         for item in items:
             add_tvshow_item(self.handle, item['title'],
                             item.get('poster'), info=item)
         if items:
-            np = int(params.get('page', '1')) + 1
+            np = int(page) + 1
             add_dir(self.handle, "Pagina Seguinte",
                     {'action': 'series_browse', 'page': str(np)}, "DefaultFolder.png")
         set_content_and_sort(self.handle, "tvshows")
@@ -218,14 +233,23 @@ class Router:
 
     def _search_results(self, query):
         scraper = TugaFlixScraper()
-        for item in scraper.search(query):
+        results = scraper.search(query)
+        for item in results:
             if item.get('type') == 'movie':
-                add_movie_item(self.handle, item['title'], item['year'],
+                add_movie_item(self.handle, item['title'], item.get('year'),
                                item.get('poster'), info=item)
             else:
                 add_tvshow_item(self.handle, item['title'],
                                 item.get('poster'), info=item)
-        set_content_and_sort(self.handle, "movies")
+        if results and all(i.get('type') == 'movie' for i in results):
+            content = "movies"
+        elif results and all(i.get('type') == 'series' for i in results):
+            content = "tvshows"
+        else:
+            content = "videos"
+        set_content_and_sort(self.handle, content)
+        if not results:
+            self._show_info("Sem resultados para a pesquisa.")
         end_directory(self.handle)
 
     def list_seasons(self, params):
@@ -255,7 +279,8 @@ class Router:
         slug = params.get('slug', '')
         year = params.get('year', '')
         scraper = TugaFlixScraper()
-        resolved = scraper.resolve_movie(slug, year)
+        resolved = scraper.resolve_movie(slug, year or None,
+                                         url=params.get('url') or None)
         if resolved:
             self._play_url(resolved, title)
         else:
@@ -267,7 +292,8 @@ class Router:
         season = params.get('season', '1')
         episode = params.get('episode', '1')
         scraper = TugaFlixScraper()
-        resolved = scraper.resolve_episode(slug, season, episode)
+        resolved = scraper.resolve_episode(slug, season, episode,
+                                           url=params.get('url') or None)
         if resolved:
             self._play_url(resolved, title)
         else:
@@ -278,12 +304,12 @@ class Router:
             log(f"PLAY URL: {url}", "info")
             return
         from resources.lib.constants import USER_AGENT as UA, BASE_URL as BU
-        listitem = xbmcgui.ListItem(label=title, path=url)
+        # Kodi applies |Header=value pairs as HTTP headers on the media request.
+        stream_url = f"{url}|User-Agent={urllib.parse.quote(UA)}&Referer={urllib.parse.quote(BU + '/') }"
+        listitem = xbmcgui.ListItem(label=title, path=stream_url)
         listitem.setInfo('video', {'title': title})
         listitem.setProperty('playable', 'true')
         listitem.setMimeType('video/mp4')
-        listitem.setProperty('User-Agent', UA)
-        listitem.setProperty('Referer', f"{BU}/")
         xbmcplugin.setResolvedUrl(self.handle, True, listitem)
         log(f"Playing: {url}", "info")
 
@@ -292,6 +318,13 @@ class Router:
             xbmcgui.Dialog().notification("TugaFlix", message, xbmcgui.NOTIFICATION_ERROR)
         else:
             log(message, "error")
+
+    def _show_info(self, message):
+        if _HAS_KODI:
+            xbmcgui.Dialog().notification("TugaFlix", message,
+                                          xbmcgui.NOTIFICATION_INFO)
+        else:
+            log(message, "info")
 
 
 if __name__ == '__main__':
