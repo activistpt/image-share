@@ -371,11 +371,17 @@ class TugaFlixScraper:
     # ─── Resolution ────────────────────────────────────────────────
 
     def resolve_movie(self, slug, year=None, url=None):
-        """Resolve a movie to a direct playable URL."""
+        """Resolve a movie to a direct playable URL plus subtitles.
+
+        Returns dict with 'url' and 'subtitles' keys, or None.
+        """
         return resolve_movie_url(slug, year, url=url)
 
     def resolve_episode(self, slug, season, episode, url=None):
-        """Resolve a TV episode to a direct playable URL."""
+        """Resolve a TV episode to a direct playable URL plus subtitles.
+
+        Returns dict with 'url' and 'subtitles' keys, or None.
+        """
         return resolve_episode_url(slug, season, episode, url=url)
 
 

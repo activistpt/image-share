@@ -5,6 +5,8 @@ TugaFlix Kodi Addon - Provider resolution dispatch.
 
 from __future__ import absolute_import
 
+import urllib.parse
+
 from resources.lib.providers.streamtape import StreamtapeResolver
 from resources.lib.common import http_request, http_request_follow, clean_html_entities, log
 from resources.lib.constants import PROVIDERS
@@ -41,15 +43,44 @@ def _post(url, data):
     return html, code, current
 
 
+def _extract_subtitles(streamtape_url):
+    """
+    Extract subtitle URL(s) from a Streamtape embed URL.
+
+    The TugaFlix player passes Portuguese subtitles via the c1_file
+    query parameter on the Streamtape embed URL.  For movies the path
+    is /sub/ and for TV episodes it is /substv/.
+
+    Returns a list of subtitle URLs (may be empty when no subs exist).
+    """
+    if not streamtape_url or '?' not in streamtape_url:
+        return []
+    try:
+        parsed = urllib.parse.urlparse(streamtape_url)
+        params = urllib.parse.parse_qs(parsed.query)
+        c1_file = params.get('c1_file', [])
+        if c1_file and c1_file[0].startswith('http'):
+            log(f"Found Portuguese subtitles: {c1_file[0][:80]}...", "debug")
+            return [c1_file[0]]
+    except Exception as e:
+        log(f"Error extracting subtitles: {e}", "warning")
+    return []
+
+
 def resolve_movie_url(slug, year=None, url=None):
     """
-    Resolve a movie to a direct playable URL.
+    Resolve a movie to a direct playable URL plus Portuguese subtitles.
 
     Flow:
       1. POST to the movie page with server_name=st1 (Streamtape)
       2. Extract the iframe src pointing to tuga.best/player/movie.php
       3. POST start_video=1 to get the Streamtape embed iframe
       4. Resolve the Streamtape embed to a direct MP4 URL
+      5. Extract subtitle URL from the c1_file parameter of the embed
+
+    Returns:
+      dict with 'url' (direct media URL) and 'subtitles' (list of URLs),
+      or None on failure.
     """
     from resources.lib.constants import BASE_URL
 
@@ -91,7 +122,9 @@ def resolve_movie_url(slug, year=None, url=None):
     # Step 5: Resolve Streamtape to direct URL
     result = StreamtapeResolver().resolve(streamtape_url)
     if result and result.get('url'):
-        return result['url']
+        # Extract Portuguese subtitles from the Streamtape embed URL
+        subtitles = _extract_subtitles(streamtape_url)
+        return {'url': result['url'], 'subtitles': subtitles}
 
     log("Failed to resolve Streamtape URL", "error")
     return None
@@ -99,13 +132,18 @@ def resolve_movie_url(slug, year=None, url=None):
 
 def resolve_episode_url(series_slug, season, episode, url=None):
     """
-    Resolve a TV episode to a direct playable URL.
+    Resolve a TV episode to a direct playable URL plus Portuguese subtitles.
 
     Flow:
       1. Fetch the episode page on tugaflix
       2. Extract the tuga.best iframe (often embedded directly for series)
       3. POST start_video=1 to get the Streamtape embed
       4. Resolve Streamtape to direct MP4
+      5. Extract subtitle URL from the c1_file parameter of the embed
+
+    Returns:
+      dict with 'url' (direct media URL) and 'subtitles' (list of URLs),
+      or None on failure.
     """
     from resources.lib.constants import BASE_URL
 
@@ -127,7 +165,9 @@ def resolve_episode_url(series_slug, season, episode, url=None):
             if streamtape_url:
                 result = StreamtapeResolver().resolve(streamtape_url)
                 if result and result.get('url'):
-                    return result['url']
+                    # Extract Portuguese subtitles from the Streamtape embed URL
+                    subtitles = _extract_subtitles(streamtape_url)
+                    return {'url': result['url'], 'subtitles': subtitles}
 
     log("Failed to resolve episode URL", "error")
     return None

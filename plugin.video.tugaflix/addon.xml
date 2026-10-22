@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.video.tugaflix" name="TugaFlix" version="1.0.6" provider-name="Community">
+<addon id="plugin.video.tugaflix" name="TugaFlix" version="1.0.7" provider-name="Community">
   <requires>
     <import addon="xbmc.python" version="3.0.0"/>
   </requires>
@@ -17,6 +17,14 @@
       <fanart>fanart.jpg</fanart>
     </assets>
     <news>
+1.0.7
+- Adicionado suporte a legendas em português da fonte (tugaflix.site / tuga.best)
+  * As legendas PT sao extraidas do parametro c1_file do embed Streamtape
+    (URL construida por tuga.best com sub=*.por.srt para filmes e .por.vtt
+    para episodios de serie)
+  * As legendas sao definidas via listitem.setSubtitles() durante a
+    reproducao, ativando automaticamente no Kodi
+
 1.0.6
 - Corrigidos 3 bugs que só aparecem num Kodi real (a v1.0.5 não funcionava):
   * xbmcplugin.addDirectoryItem usava isfolder= em vez de isFolder= -> os menus

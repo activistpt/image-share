@@ -283,7 +283,9 @@ class Router:
         resolved = scraper.resolve_movie(slug, year or None,
                                          url=params.get('url') or None)
         if resolved:
-            self._play_url(resolved, title)
+            url = resolved['url'] if isinstance(resolved, dict) else resolved
+            subtitles = resolved.get('subtitles', []) if isinstance(resolved, dict) else None
+            self._play_url(url, title, subtitles)
         else:
             self._show_error("Nao foi possivel resolver o URL do filme.")
 
@@ -296,11 +298,13 @@ class Router:
         resolved = scraper.resolve_episode(slug, season, episode,
                                            url=params.get('url') or None)
         if resolved:
-            self._play_url(resolved, title)
+            url = resolved['url'] if isinstance(resolved, dict) else resolved
+            subtitles = resolved.get('subtitles', []) if isinstance(resolved, dict) else None
+            self._play_url(url, title, subtitles)
         else:
             self._show_error("Nao foi possivel resolver o URL do episodio.")
 
-    def _play_url(self, url, title):
+    def _play_url(self, url, title, subtitles=None):
         if not _HAS_KODI:
             log(f"PLAY URL: {url}", "info")
             return
@@ -311,6 +315,9 @@ class Router:
         listitem.setInfo('video', {'title': title})
         listitem.setProperty('playable', 'true')
         listitem.setMimeType('video/mp4')
+        if subtitles:
+            listitem.setSubtitles(subtitles)
+            log(f"Set {len(subtitles)} subtitle track(s) on player", "info")
         xbmcplugin.setResolvedUrl(self.handle, True, listitem)
         log(f"Playing: {url}", "info")
 
