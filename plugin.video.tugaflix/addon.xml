@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="plugin.video.tugaflix" name="TugaFlix" version="1.0.4" provider-name="Community">
+  <requires>
+    <import addon="xbmc.python" version="3.0.0"/>
+  </requires>
+  <extension point="xbmc.python.pluginsource" library="default.py">
+    <provides>video</provides>
+  </extension>
+  <extension point="xbmc.addon.metadata">
+    <summary lang="pt">TugaFlix - Filmes e Séries online grátis</summary>
+    <summary lang="en">TugaFlix - Movies and TV Shows online</summary>
+    <description lang="pt">Addon para ver filmes e séries do TugaFlix diretamente no Kodi.</description>
+    <description lang="en">Watch movies and TV shows from TugaFlix directly in Kodi.</description>
+    <platform>all</platform>
+  </extension>
+</addon>
