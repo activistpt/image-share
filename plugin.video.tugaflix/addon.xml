@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.video.tugaflix" name="TugaFlix" version="1.0.5" provider-name="Community">
+<addon id="plugin.video.tugaflix" name="TugaFlix" version="1.0.6" provider-name="Community">
   <requires>
     <import addon="xbmc.python" version="3.0.0"/>
   </requires>
@@ -17,6 +17,16 @@
       <fanart>fanart.jpg</fanart>
     </assets>
     <news>
+1.0.6
+- Corrigidos 3 bugs que só aparecem num Kodi real (a v1.0.5 não funcionava):
+  * xbmcplugin.addDirectoryItem usava isfolder= em vez de isFolder= -> os menus
+    Filmes, Series e Episodios devolviam "Router error" e nao listavam nada
+  * xbmcgui.INPUT_TEXT nao existe -> a Pesquisar rebentava (usa INPUT_ALPHANUM)
+  * rótulo com o ano repetido ("Titulo (2026) (2026)")
+- Verificado num Kodi 21.3 real: 35 testes (menu, listagens, filtros,
+  temporadas/episodios, reproducao de filme e de episodio com o stream a
+  avancar, e pesquisa)
+
 1.0.5
 - Corrigida a instalação: o zip passa a conter a pasta plugin.video.tugaflix (o Kodi ignora zips sem pasta raiz)
 - Corrigidos os menus Géneros, Anos e País (o site usa /ano/, não /year/, e já não expõe esses links em /filmes/)

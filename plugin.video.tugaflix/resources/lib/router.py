@@ -55,7 +55,7 @@ def add_dir(handle, label, query, iconimage=None, isfolder=True):
     listitem = xbmcgui.ListItem(label=label)
     listitem.setArt({'icon': iconimage or "DefaultFolder.png",
                      'thumb': iconimage or "DefaultFolder.png"})
-    xbmcplugin.addDirectoryItem(handle, url, listitem, isfolder)
+    xbmcplugin.addDirectoryItem(handle, url, listitem, isFolder=isfolder)
 
 
 def add_movie_item(handle, title, year, poster, info=None):
@@ -79,7 +79,7 @@ def add_movie_item(handle, title, year, poster, info=None):
         'rating': rating,
     })
     listitem.setProperty('isplayable', 'true')
-    xbmcplugin.addDirectoryItem(handle, url, listitem, isfolder=False)
+    xbmcplugin.addDirectoryItem(handle, url, listitem, isFolder=False)
 
 
 def add_tvshow_item(handle, title, poster, info=None):
@@ -94,7 +94,7 @@ def add_tvshow_item(handle, title, poster, info=None):
                      'poster': poster or '', 'fanart': poster or ''})
     listitem.setInfo('video', {'title': title, 'tvshowtitle': title,
                                'plot': info.get('plot', '') if info else ''})
-    xbmcplugin.addDirectoryItem(handle, url, listitem, isfolder=True)
+    xbmcplugin.addDirectoryItem(handle, url, listitem, isFolder=True)
 
 
 def add_episode_item(handle, title, season, episode, poster, info=None):
@@ -116,7 +116,7 @@ def add_episode_item(handle, title, season, episode, poster, info=None):
         'plot': info.get('plot', '') if info else '',
     })
     listitem.setProperty('isplayable', 'true')
-    xbmcplugin.addDirectoryItem(handle, url, listitem, isfolder=False)
+    xbmcplugin.addDirectoryItem(handle, url, listitem, isFolder=False)
 
 
 def set_content_and_sort(handle, content_type):
@@ -225,7 +225,8 @@ class Router:
 
     def search(self):
         if _HAS_KODI:
-            query = xbmcgui.Dialog().input("Pesquisar no TugaFlix:", type=xbmcgui.INPUT_TEXT)
+            query = xbmcgui.Dialog().input("Pesquisar no TugaFlix:",
+                                            type=xbmcgui.INPUT_ALPHANUM)
             if query:
                 self._search_results(query)
         else:

@@ -25,7 +25,7 @@ _GRID_RE = re.compile(
 )
 _GRID_TITLE_RE = re.compile(r'class="ov-title">([^<]+)</div>')
 _GRID_RATING_RE = re.compile(r'IMDb\s*([\d.]+)')
-_YEAR_IN_TITLE_RE = re.compile(r'\((\d{4})\)')
+_YEAR_IN_TITLE_RE = re.compile(r'\s*\((\d{4})\)$')
 _YEAR_IN_SLUG_RE = re.compile(r'-(\d{4})(?:-vp)?$')
 
 _SELECT_RE = re.compile(r'<select\s+name="(\w+)"[^>]*>(.*?)</select>', re.DOTALL)
@@ -103,7 +103,12 @@ class TugaFlixScraper:
                     rating = 0.0
 
             year_match = _YEAR_IN_TITLE_RE.search(title)
-            year = int(year_match.group(1)) if year_match else _year_from_slug(slug)
+            if year_match:
+                # "Title (2026)" -> title="Title", year=2026 (evita o ano repetido)
+                year = int(year_match.group(1))
+                title = title[:year_match.start()].rstrip()
+            else:
+                year = _year_from_slug(slug)
 
             items.append({
                 'type': 'movie' if kind == 'filmes' else 'series',
