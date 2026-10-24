@@ -8,3 +8,7 @@ Instalar de ficheiro zip → a fonte → repository.tugaflix.pt-1.0.3.zip
 Instalar do repositório → TugaFlix PT Repo → TugaFlix
 
 https://tugaflix-repo.surge.sh/zips/
+
+https://buymeacoffee.com/ptlegion
+Powered by: Ø̴Ʉ̴Ŧ̴Ş̴ł̴Đ̴Ɇ̴Ɍ̴
+
